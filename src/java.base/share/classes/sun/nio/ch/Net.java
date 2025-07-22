@@ -501,6 +501,16 @@ public class Net {
         return IOUtil.newFD(socket0(preferIPv6, true, true, FAST_LOOPBACK, false));
     }
 
+    static FileDescriptor serverSocket(ProtocolFamily family, boolean mptcp) {
+        boolean preferIPv6 = isIPv6Available() &&
+            (family != StandardProtocolFamily.INET);
+        return IOUtil.newFD(socket0(preferIPv6, true, true, FAST_LOOPBACK, mptcp));
+    }
+
+    static FileDescriptor mptcpServerSocket() {
+        return serverSocket(UNSPEC, true);
+    }
+
     // Due to oddities SO_REUSEADDR on Windows reuse is ignored
     private static native int socket0(boolean preferIPv6, boolean stream, boolean reuse,
                                       boolean fastLoopback, boolean mptcp);
