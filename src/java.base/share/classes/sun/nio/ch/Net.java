@@ -491,6 +491,16 @@ public class Net {
         return IOUtil.newFD(socket0(preferIPv6, stream, false, FAST_LOOPBACK, false));
     }
 
+    static FileDescriptor socket(ProtocolFamily family, boolean stream, boolean mptcp) throws IOException {
+        boolean preferIPv6 = isIPv6Available() &&
+            (family != StandardProtocolFamily.INET);
+        return IOUtil.newFD(socket0(preferIPv6, stream, false, FAST_LOOPBACK, mptcp));
+    }
+
+    static FileDescriptor mptcpSocket() throws IOException {
+        return socket(UNSPEC, true, true);
+    }
+
     static FileDescriptor serverSocket() {
         return serverSocket(UNSPEC);
     }
