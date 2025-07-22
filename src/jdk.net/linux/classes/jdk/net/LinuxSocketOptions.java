@@ -24,6 +24,9 @@
  */
 package jdk.net;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.net.SocketException;
 import java.nio.file.attribute.UserPrincipal;
 import java.nio.file.attribute.GroupPrincipal;
@@ -125,6 +128,27 @@ class LinuxSocketOptions extends PlatformSocketOptions {
         return new UnixDomainPrincipal(user, group);
     }
 
+    @Override
+    boolean isMptcpSupported() {
+        String filePath = "/proc/sys/net/mptcp/enabled";
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            String line = reader.readLine();
+            if (line != null) {
+                return "1".equals(line.trim());
+            }
+        } catch (IOException e) {
+            System.err.println("Error reading MPTCP status: " + e.getMessage());
+        }
+
+        return false;
+    }
+
+    @Override
+    int mptcpify(int fd) throws SocketException {
+        return mptcpify0(fd);
+    }
+
     private static native void setTcpKeepAliveProbes0(int fd, int value) throws SocketException;
     private static native void setTcpKeepAliveTime0(int fd, int value) throws SocketException;
     private static native void setTcpKeepAliveIntvl0(int fd, int value) throws SocketException;
@@ -140,6 +164,7 @@ class LinuxSocketOptions extends PlatformSocketOptions {
     private static native boolean quickAckSupported0();
     private static native boolean incomingNapiIdSupported0();
     private static native int getIncomingNapiId0(int fd) throws SocketException;
+    private static native int mptcpify0(int fd) throws SocketException;
     static {
         System.loadLibrary("extnet");
     }
