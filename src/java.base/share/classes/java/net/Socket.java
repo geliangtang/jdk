@@ -168,7 +168,7 @@ public class Socket implements java.io.Closeable {
      * @since   1.1
      */
     public Socket() {
-        this.impl = createImpl();
+        this.impl = createImpl(false);
     }
 
     /**
@@ -207,7 +207,7 @@ public class Socket implements java.io.Closeable {
                 checkAddress (epoint.getAddress(), "Socket");
             }
             // create a SOCKS or HTTP SocketImpl that delegates to a platform SocketImpl
-            SocketImpl delegate = SocketImpl.createPlatformSocketImpl(false);
+            SocketImpl delegate = SocketImpl.createPlatformSocketImpl(false, false);
             impl = (type == Proxy.Type.SOCKS) ? new SocksSocketImpl(p, delegate)
                                               : new HttpConnectSocketImpl(p, delegate, this);
         } else {
@@ -215,7 +215,7 @@ public class Socket implements java.io.Closeable {
                 // create a platform or custom SocketImpl for the DIRECT case
                 SocketImplFactory factory = Socket.factory;
                 if (factory == null) {
-                    impl = SocketImpl.createPlatformSocketImpl(false);
+                    impl = SocketImpl.createPlatformSocketImpl(false, false);
                 } else {
                     impl = factory.createSocketImpl();
                 }
@@ -404,6 +404,39 @@ public class Socket implements java.io.Closeable {
     }
 
     /**
+     * Creates a stream socket and connects it to the specified port
+     * number on the named host using Multipath TCP (MPTCP) or TCP
+     * protocol.
+     * <p>
+     * If the specified host is {@code null} it is the equivalent of
+     * specifying the address as
+     * {@link java.net.InetAddress#getByName InetAddress.getByName}{@code (null)}.
+     * In other words, it is equivalent to specifying an address of the
+     * loopback interface. </p>
+     * <p>
+     * If the application has specified a {@linkplain SocketImplFactory client
+     * socket implementation factory}, that factory's
+     * {@linkplain SocketImplFactory#createSocketImpl() createSocketImpl}
+     * method is called to create the actual socket implementation. Otherwise
+     * a system-default socket implementation is created.
+     *
+     * @param      host     the host name, or {@code null} for the loopback address.
+     * @param      port     the port number.
+     * @param      stream   must be true, false is not allowed.
+     * @param      mptcp    create a socket with MPTCP or TCP protocol.
+     * @throws     IOException  if an I/O error occurs when creating the socket.
+     * @throws     IllegalArgumentException if the stream parameter is {@code false}
+     *             or if the port parameter is outside the specified range of valid
+     *             port values, which is between 0 and 65535, inclusive.
+     */
+    @SuppressWarnings("this-escape")
+    public Socket(String host, int port, boolean stream, boolean mptcp) throws IOException {
+        this(host != null ? new InetSocketAddress(host, port) :
+               new InetSocketAddress(InetAddress.getByName(null), port),
+             (SocketAddress) null, stream, mptcp);
+    }
+
+    /**
      * Creates a socket and connects it to the specified port number at
      * the specified IP address.
      * <p>
@@ -443,6 +476,22 @@ public class Socket implements java.io.Closeable {
     private Socket(SocketAddress address, SocketAddress localAddr, boolean stream)
         throws IOException
     {
+        this(address, localAddr, stream, false);
+    }
+
+    /**
+     * Initialize a new Socket that is connected to the given remote address.
+     * The MPTCP or TCP protocol socket is optionally bound to a local address
+     * before connecting.
+     *
+     * @param address the remote address to connect to
+     * @param localAddr the local address to bind to, can be null
+     * @param stream true for a stream socket, false for a datagram socket
+     * @param mptcp create a socket with MPTCP or TCP protocol
+     */
+    private Socket(SocketAddress address, SocketAddress localAddr, boolean stream, boolean mptcp)
+        throws IOException
+    {
         Objects.requireNonNull(address);
         if (!stream) {
             throw new IllegalArgumentException(
@@ -451,7 +500,7 @@ public class Socket implements java.io.Closeable {
         assert address instanceof InetSocketAddress;
 
         // create the SocketImpl and the underlying socket
-        SocketImpl impl = createImpl();
+        SocketImpl impl = createImpl(mptcp);
         impl.create(stream);
 
         this.impl = impl;
@@ -471,14 +520,16 @@ public class Socket implements java.io.Closeable {
     /**
      * Create a new SocketImpl for a connecting/client socket. The SocketImpl
      * is created without an underlying socket.
+     *
+     * @param mptcp create a socket with MPTCP or TCP protocol.
      */
-    private static SocketImpl createImpl() {
+    private static SocketImpl createImpl(boolean mptcp) {
         SocketImplFactory factory = Socket.factory;
         if (factory != null) {
             return factory.createSocketImpl();
         } else {
             // create a SOCKS SocketImpl that delegates to a platform SocketImpl
-            SocketImpl delegate = SocketImpl.createPlatformSocketImpl(false);
+            SocketImpl delegate = SocketImpl.createPlatformSocketImpl(false, mptcp);
             return new SocksSocketImpl(delegate);
         }
     }
@@ -498,7 +549,7 @@ public class Socket implements java.io.Closeable {
                     }
                     SocketImpl impl = this.impl;
                     if (impl == null) {
-                        this.impl = impl = createImpl();
+                        this.impl = impl = createImpl(false);
                     }
                     try {
                         impl.create(true);
