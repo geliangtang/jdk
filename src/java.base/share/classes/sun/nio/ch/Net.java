@@ -485,25 +485,34 @@ public class Net {
         return socket(UNSPEC, true);
     }
 
-    static FileDescriptor socket(ProtocolFamily family, boolean stream) throws IOException {
+    static FileDescriptor socket(ProtocolFamily family, boolean stream, boolean mptcp)
+	throws IOException {
         boolean preferIPv6 = isIPv6Available() &&
             (family != StandardProtocolFamily.INET);
-        return IOUtil.newFD(socket0(preferIPv6, stream, false, FAST_LOOPBACK));
+        return IOUtil.newFD(socket0(preferIPv6, stream, false, FAST_LOOPBACK, mptcp));
+    }
+
+    static FileDescriptor socket(ProtocolFamily family, boolean stream) throws IOException {
+        return socket(family, stream, false);
     }
 
     static FileDescriptor serverSocket() {
         return serverSocket(UNSPEC);
     }
 
-    static FileDescriptor serverSocket(ProtocolFamily family) {
+    static FileDescriptor serverSocket(ProtocolFamily family, boolean mptcp) {
         boolean preferIPv6 = isIPv6Available() &&
             (family != StandardProtocolFamily.INET);
-        return IOUtil.newFD(socket0(preferIPv6, true, true, FAST_LOOPBACK));
+        return IOUtil.newFD(socket0(preferIPv6, true, true, FAST_LOOPBACK, mptcp));
+    }
+
+    static FileDescriptor serverSocket(ProtocolFamily family) {
+        return serverSocket(family, false);
     }
 
     // Due to oddities SO_REUSEADDR on Windows reuse is ignored
     private static native int socket0(boolean preferIPv6, boolean stream, boolean reuse,
-                                      boolean fastLoopback);
+                                      boolean fastLoopback, boolean mptcp);
 
     public static void bind(FileDescriptor fd, InetAddress addr, int port)
         throws IOException

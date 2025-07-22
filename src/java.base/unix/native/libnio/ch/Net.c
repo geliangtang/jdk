@@ -255,13 +255,23 @@ Java_sun_nio_ch_Net_canUseIPv6OptionsWithIPv4LocalAddress0(JNIEnv* env, jclass c
 
 JNIEXPORT jint JNICALL
 Java_sun_nio_ch_Net_socket0(JNIEnv *env, jclass cl, jboolean preferIPv6,
-                            jboolean stream, jboolean reuse, jboolean ignored)
+                            jboolean stream, jboolean reuse, jboolean ignored,
+                            jboolean mptcp)
 {
     int fd;
     int type = (stream ? SOCK_STREAM : SOCK_DGRAM);
     int domain = (ipv6_available() && preferIPv6) ? AF_INET6 : AF_INET;
+    int protocol = 0;
 
-    fd = socket(domain, type, 0);
+#if defined(__linux__) && defined(IPPROTO_MPTCP)
+    if (stream == JNI_TRUE && mptcp == JNI_TRUE) {
+        protocol = IPPROTO_MPTCP;
+    }
+#else
+    (void)mptcp; /* Avoid compile warning when MPTCP is not supported */
+#endif
+
+    fd = socket(domain, type, protocol);
     if (fd < 0) {
         return handleSocketError(env, errno);
     }
