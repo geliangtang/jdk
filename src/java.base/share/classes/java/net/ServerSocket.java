@@ -227,6 +227,57 @@ public class ServerSocket implements java.io.Closeable {
     }
 
     /**
+     * Create a server using <i>mptcp</i> (Multipath TCP) or TCP protocol with
+     * the specified port, listen backlog, and local IP address to bind to.
+     * The <i>bindAddr</i> argument can be used on a multi-homed host for a
+     * ServerSocket that will only accept connect requests to one of its addresses.
+     * If <i>bindAddr</i> is null, it will default accepting
+     * connections on any/all local addresses.
+     * The port must be between 0 and 65535, inclusive.
+     * A port number of {@code 0} means that the port number is
+     * automatically allocated, typically from an ephemeral port range.
+     * This port number can then be retrieved by calling
+     * {@link #getLocalPort getLocalPort}.
+     *
+     * The {@code backlog} argument is the requested maximum number of
+     * pending connections on the socket. Its exact semantics are implementation
+     * specific. In particular, an implementation may impose a maximum length
+     * or may choose to ignore the parameter altogether. The value provided
+     * should be greater than {@code 0}. If it is less than or equal to
+     * {@code 0}, then an implementation specific default will be used.
+     *
+     * The {@code mptcp} argument is used to control whether to create a socket
+     * with MPTCP or TCP protocol.
+     *
+     * @param port  the port number, or {@code 0} to use a port
+     *              number that is automatically allocated.
+     * @param backlog requested maximum length of the queue of incoming
+     *                connections.
+     * @param bindAddr the local InetAddress the server will bind to
+     * @param mptcp create a socket with MPTCP or TCP protocol.
+     *
+     * @throws  IOException if an I/O error occurs when opening the socket.
+     * @throws     IllegalArgumentException if the port parameter is outside
+     *             the specified range of valid port values, which is between
+     *             0 and 65535, inclusive.
+     */
+    @SuppressWarnings("this-escape")
+    public ServerSocket(int port, int backlog, InetAddress bindAddr, boolean mptcp) throws IOException {
+        if (port < 0 || port > 0xFFFF)
+            throw new IllegalArgumentException("Port value out of range: " + port);
+        if (backlog < 1)
+            backlog = 50;
+
+        this.impl = createImpl(mptcp);
+        try {
+            bind(new InetSocketAddress(bindAddr, port), backlog);
+        } catch (IOException e) {
+            close();
+            throw e;
+        }
+    }
+
+    /**
      * Create a SocketImpl for a server socket. The SocketImpl is created
      * without an underlying socket.
      */
@@ -236,6 +287,21 @@ public class ServerSocket implements java.io.Closeable {
             return factory.createSocketImpl();
         } else {
             return SocketImpl.createPlatformSocketImpl(true);
+        }
+    }
+
+    /**
+     * Create a SocketImpl for a server socket. The SocketImpl is created
+     * without an underlying socket.
+     *
+     * @param mptcp create a socket with MPTCP or TCP protocol.
+     */
+    private static SocketImpl createImpl(boolean mptcp) {
+        SocketImplFactory factory = ServerSocket.factory;
+        if (factory != null) {
+            return factory.createSocketImpl();
+        } else {
+            return SocketImpl.createPlatformSocketImpl(true, mptcp);
         }
     }
 
