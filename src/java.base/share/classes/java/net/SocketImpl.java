@@ -48,8 +48,8 @@ public abstract class SocketImpl implements SocketOptions {
      * Creates an instance of platform's SocketImpl
      */
     @SuppressWarnings("unchecked")
-    static <S extends SocketImpl & PlatformSocketImpl> S createPlatformSocketImpl(boolean server) {
-        return (S) new NioSocketImpl(server);
+    static <S extends SocketImpl & PlatformSocketImpl> S createPlatformSocketImpl(boolean server, boolean mptcp) {
+        return (S) new NioSocketImpl(server, mptcp);
     }
 
     /**
