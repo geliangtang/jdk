@@ -53,6 +53,14 @@ public abstract class SocketImpl implements SocketOptions {
     }
 
     /**
+     * Creates an instance of platform's SocketImpl
+     */
+    @SuppressWarnings("unchecked")
+    static <S extends SocketImpl & PlatformSocketImpl> S createPlatformSocketImpl(boolean server, boolean mptcp) {
+        return (S) new NioSocketImpl(server, mptcp);
+    }
+
+    /**
      * The file descriptor object for this socket.
      */
     protected FileDescriptor fd;
