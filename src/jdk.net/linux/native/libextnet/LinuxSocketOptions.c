@@ -290,3 +290,123 @@ JNIEXPORT jboolean JNICALL Java_jdk_net_LinuxSocketOptions_getIpDontFragment0
     handleError(env, rv, "get option IP_DONTFRAGMENT failed");
     return optval == IP_PMTUDISC_DO ? JNI_TRUE : JNI_FALSE;
 }
+
+/*
+ * Class:     jdk_net_LinuxSocketOptions
+ * Method:    mptcpify0
+ * Signature: (II)V
+ */
+JNIEXPORT jint JNICALL Java_jdk_net_LinuxSocketOptions_mptcpify0
+(JNIEnv *env, jobject unused, jint fd)
+{
+    struct sockaddr_storage addr;
+    jint domain, type, protocol;
+    jint rv, fdm, reuse;
+    socklen_t len;
+
+    memset(&addr, 0, sizeof(addr));
+
+    len = sizeof(addr);
+    rv = getsockname(fd, (struct sockaddr *)&addr, &len);
+    if (rv) {
+        handleError(env, rv, "getsockname");
+        return rv;
+    }
+
+    domain = addr.ss_family;
+    if (domain == AF_INET) {
+        struct sockaddr_in *addr_in = (struct sockaddr_in *)&addr;
+
+        if (addr_in->sin_port != 0 || addr_in->sin_addr.s_addr != INADDR_ANY) {
+            handleError(env, -1, "socket bound v4");
+            return -1;
+        }
+    } else if (domain == AF_INET6) {
+        struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6*)&addr;
+        const struct in6_addr in6addr_any = IN6ADDR_ANY_INIT;
+
+        if (addr_in6->sin6_port != 0 ||
+            memcmp(&addr_in6->sin6_addr, &in6addr_any, sizeof(in6addr_any)) != 0) {
+            handleError(env, -1, "socket bound v6");
+            return -1;
+        }
+    } else {
+        handleError(env, -1, "unsupported socket domain");
+        return -1;
+    }
+
+    len = sizeof(addr);
+    if (getpeername(fd, (struct sockaddr*)&addr, &len) == 0) {
+        handleError(env, -1, "socket connected");
+        return -1;
+    }
+
+    len = sizeof(type);
+    rv = getsockopt(fd, SOL_SOCKET, SO_TYPE, &type, &len);
+    if (rv) {
+        handleError(env, rv, "getsockopt(SO_TYPE)");
+        return rv;
+    }
+
+    if (type != SOCK_STREAM) {
+        handleError(env, -1, "unsupported socket type");
+        return -1;
+    }
+
+    len = sizeof(protocol);
+    rv = getsockopt(fd, SOL_SOCKET, SO_PROTOCOL, &protocol, &len);
+    if (rv) {
+        handleError(env, rv, "getsockopt(SO_PROTOCOL)");
+        return rv;
+    }
+
+    if (protocol != 0 && protocol != IPPROTO_TCP) {
+        handleError(env, -1, "unsupported socket protocol");
+        return -1;
+    }
+
+    fdm = socket(domain, type, IPPROTO_MPTCP);
+    if (fdm < 0) {
+        handleError(env, fdm, "socket(MPTCP)");
+        return fdm;
+    }
+
+    if (domain == AF_INET6) {
+        jint v6only;
+
+        len = sizeof(v6only);
+        rv = getsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&v6only, &len);
+        if (rv) {
+            handleError(env, rv, "getsockopt(IPV6_V6ONLY)");
+            goto close_fd;
+        }
+
+        rv = setsockopt(fdm, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&v6only, len);
+        if (rv) {
+            handleError(env, rv, "setsockopt(IPV6_V6ONLY)");
+            goto close_fd;
+        }
+    }
+
+    len = sizeof(reuse);
+    rv = getsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (char*)&reuse, &len);
+    if (rv) {
+        handleError(env, rv, "getsockopt(SO_REUSEPORT)");
+        goto close_fd;
+    }
+
+    rv = setsockopt(fdm, SOL_SOCKET, SO_REUSEPORT, (char*)&reuse, len);
+    if (rv) {
+        handleError(env, rv, "setsockopt(SO_REUSEPORT)");
+        goto close_fd;
+    }
+
+    rv = dup2(fdm, fd);
+    handleError(env, rv, "dup2");
+
+close_fd:
+    rv = close(fdm);
+    handleError(env, rv, "close");
+
+    return rv;
+}

@@ -153,6 +153,17 @@ public final class ExtendedSocketOptions {
             = new ExtSocketOption<Integer>("TCP_KEEPCOUNT", Integer.class);
 
     /**
+     * MPTCP (Multipath TCP)
+     *
+     * <p>
+     * Must be set before bind()/connect(), exposed only when the platform support.
+     *
+     * @since 26
+     */
+    public static final SocketOption<Boolean> TCP_MPTCPIFY =
+            new ExtSocketOption<Boolean>("TCP_MPTCPIFY", Boolean.class);
+
+    /**
      * Identifies the receive queue that the last incoming packet for the socket
      * was received on.
      *
@@ -239,6 +250,8 @@ public final class ExtendedSocketOptions {
             platformSocketOptions.incomingNapiIdSupported();
     private static final boolean ipDontFragmentSupported  =
             platformSocketOptions.ipDontFragmentSupported();
+    private static final boolean mptcpSupported =
+            platformSocketOptions.isMptcpSupported();
 
     private static final Set<SocketOption<?>> extendedOptions = options();
 
@@ -258,6 +271,9 @@ public final class ExtendedSocketOptions {
         }
         if (ipDontFragmentSupported) {
             options.add(IP_DONTFRAGMENT);
+        }
+        if (mptcpSupported) {
+            options.add(TCP_MPTCPIFY);
         }
         return Collections.unmodifiableSet(options);
     }
@@ -286,6 +302,8 @@ public final class ExtendedSocketOptions {
                     setTcpKeepAliveTime(fd, (Integer) value);
                 } else if (option == TCP_KEEPINTERVAL) {
                     setTcpKeepAliveIntvl(fd, (Integer) value);
+                } else if (option == TCP_MPTCPIFY) {
+                    mptcpify(fd, (boolean) value);
                 } else if (option == SO_INCOMING_NAPI_ID) {
                     if (!incomingNapiIdOptSupported)
                         throw new UnsupportedOperationException("Attempt to set unsupported option " + option);
@@ -385,6 +403,14 @@ public final class ExtendedSocketOptions {
         return platformSocketOptions.getIncomingNapiId(fdAccess.get(fd));
     }
 
+    private static void mptcpify(FileDescriptor fd, boolean enable)
+            throws SocketException {
+        if (enable) {
+            if (platformSocketOptions.mptcpify(fdAccess.get(fd)) < 0)
+                throw new SocketException("mptcpify");
+        }
+    }
+
     static class PlatformSocketOptions {
 
         protected PlatformSocketOptions() {}
@@ -482,6 +508,14 @@ public final class ExtendedSocketOptions {
 
         int getIncomingNapiId(int fd) throws SocketException {
             throw new UnsupportedOperationException("unsupported SO_INCOMING_NAPI_ID socket option");
+        }
+
+        boolean isMptcpSupported() {
+            return false;
+        }
+
+        int mptcpify(int fd) throws SocketException {
+            throw new UnsupportedOperationException("unsupported TCP_MPTCPIFY option");
         }
     }
 }
