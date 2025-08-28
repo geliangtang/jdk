@@ -86,6 +86,9 @@ public final class NioSocketImpl extends SocketImpl implements PlatformSocketImp
     // true if this is a SocketImpl for a ServerSocket
     private final boolean server;
 
+    // true if this is a SocketImpl for a MptcpServerSocket
+    private final boolean mptcp;
+
     // Lock held when reading (also used when accepting or connecting)
     private final ReentrantLock readLock = new ReentrantLock();
 
@@ -128,9 +131,11 @@ public final class NioSocketImpl extends SocketImpl implements PlatformSocketImp
     /**
      * Creates an instance of this SocketImpl.
      * @param server true if this is a SocketImpl for a ServerSocket
+     * @param mptcp enable MPTCP
      */
-    public NioSocketImpl(boolean server) {
+    public NioSocketImpl(boolean server, boolean mptcp) {
         this.server = server;
+        this.mptcp = mptcp;
     }
 
     /**
@@ -468,9 +473,9 @@ public final class NioSocketImpl extends SocketImpl implements PlatformSocketImp
                 throw new IOException("Already created");
             FileDescriptor fd;
             if (server) {
-                fd = Net.serverSocket();
+                fd = Net.serverSocket(Net.UNSPEC, mptcp);
             } else {
-                fd = Net.socket();
+                fd = Net.socket(Net.UNSPEC, true, mptcp);
             }
             Runnable closer = closerFor(fd);
             this.fd = fd;
