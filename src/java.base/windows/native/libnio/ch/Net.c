@@ -152,11 +152,13 @@ Java_sun_nio_ch_Net_canUseIPv6OptionsWithIPv4LocalAddress0(JNIEnv* env, jclass c
 
 JNIEXPORT jint JNICALL
 Java_sun_nio_ch_Net_socket0(JNIEnv *env, jclass cl, jboolean preferIPv6,
-                            jboolean stream, jboolean reuse, jboolean fastLoopback)
+                            jboolean stream, jboolean reuse, jboolean fastLoopback,
+                            jboolean mptcp)
 {
     SOCKET s;
     int domain = (preferIPv6) ? AF_INET6 : AF_INET;
 
+    (void)mptcp; /* not support MPTCP yet */
     s = socket(domain, (stream ? SOCK_STREAM : SOCK_DGRAM), 0);
     if (s != INVALID_SOCKET) {
         SetHandleInformation((HANDLE)s, HANDLE_FLAG_INHERIT, 0);
