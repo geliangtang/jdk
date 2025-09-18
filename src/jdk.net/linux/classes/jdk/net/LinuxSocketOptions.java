@@ -125,6 +125,25 @@ class LinuxSocketOptions extends PlatformSocketOptions {
         return new UnixDomainPrincipal(user, group);
     }
 
+    @Override
+    boolean mptcpSupported() {
+        try {
+            return isMptcpSupported0();
+        } catch (UnsatisfiedLinkError e) {
+           return false;
+        }
+    }
+
+    @Override
+    void setMptcpEnabled(int fd, boolean on) throws SocketException {
+        setMptcpEnabled0(fd, on);
+    }
+
+    @Override
+    boolean getMptcpEnabled(int fd) throws SocketException {
+        return getMptcpEnabled0(fd);
+    }
+
     private static native void setTcpKeepAliveProbes0(int fd, int value) throws SocketException;
     private static native void setTcpKeepAliveTime0(int fd, int value) throws SocketException;
     private static native void setTcpKeepAliveIntvl0(int fd, int value) throws SocketException;
@@ -140,6 +159,9 @@ class LinuxSocketOptions extends PlatformSocketOptions {
     private static native boolean quickAckSupported0();
     private static native boolean incomingNapiIdSupported0();
     private static native int getIncomingNapiId0(int fd) throws SocketException;
+    private static native boolean isMptcpSupported0();
+    private static native void setMptcpEnabled0(int fd, boolean on) throws SocketException;
+    private static native boolean getMptcpEnabled0(int fd) throws SocketException;
     static {
         System.loadLibrary("extnet");
     }

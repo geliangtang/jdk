@@ -29,6 +29,11 @@
 #include <errno.h>
 #include <unistd.h>
 
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <sys/types.h>
+
 #include <jni.h>
 #include <netinet/tcp.h>
 #include <netinet/in.h>
@@ -289,4 +294,133 @@ JNIEXPORT jboolean JNICALL Java_jdk_net_LinuxSocketOptions_getIpDontFragment0
     rv = getsockopt(fd, optlevel, optname, &optval, &sz);
     handleError(env, rv, "get option IP_DONTFRAGMENT failed");
     return optval == IP_PMTUDISC_DO ? JNI_TRUE : JNI_FALSE;
+}
+
+#ifndef SO_PROTOCOL
+#define SO_PROTOCOL 38
+#endif
+
+static int read_int_file(const char* path, int* out) {
+    char buf[32];
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return -1;
+    ssize_t n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (n <= 0) return -1;
+    buf[n] = '\0';
+    *out = atoi(buf);
+    return 0;
+}
+
+/* Class:     jdk_net_LinuxSocketOptions
+ * Method:    isMptcpSupported0
+ * Signature: ()Z
+ */
+JNIEXPORT jboolean JNICALL Java_jdk_net_LinuxSocketOptions_isMptcpSupported0
+(JNIEnv *env, jclass clazz) {
+    int v;
+    if (read_int_file("/proc/sys/net/mptcp/enabled", &v) == 0) {
+        return JNI_TRUE;
+    }
+
+    return JNI_FALSE;
+}
+
+/*
+ * Class:    jdk_net_LinuxSocketOptions
+ * Method:   setMptcpEnabled0
+ * Signature: (II)V
+ */
+JNIEXPORT void JNICALL
+Java_jdk_net_LinuxSocketOptions_setMptcpEnabled0(JNIEnv *env, jclass clazz,
+                                                 jint fd, jboolean on) {
+#ifdef IPPROTO_MPTCP
+    if (!on) return;
+
+    int domain, type, proto;
+    int v6only, reuse;
+    socklen_t len = sizeof(int);
+
+    if (getsockopt(fd, SOL_SOCKET, SO_DOMAIN, &domain, &len) == -1) {
+        JNU_ThrowByNameWithLastError(env, "java/net/SocketException", "getsockopt(SO_DOMAIN) failed");
+        return;
+    }
+
+    if (domain != AF_INET && domain != AF_INET6) {
+        JNU_ThrowByName(env, "java/net/SocketException", "unsupported socket domain");
+        return;
+    }
+
+    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &type, &len) == -1) {
+        JNU_ThrowByNameWithLastError(env, "java/net/SocketException", "getsockopt(SO_TYPE) failed");
+        return;
+    }
+
+    if (type != SOCK_STREAM) {
+        JNU_ThrowByName(env, "java/net/SocketException", "unsupported socket type");
+        return;
+    }
+
+    if (getsockopt(fd, SOL_SOCKET, SO_PROTOCOL, &proto, &len) == -1) {
+        JNU_ThrowByNameWithLastError(env, "java/net/SocketException", "getsockopt(SO_PROTOCOL) failed");
+        return;
+    }
+
+    if (proto !=0 && proto != IPPROTO_TCP) {
+        JNU_ThrowByName(env, "java/net/SocketException", "unsupported socket protocol");
+        return;
+    }
+
+    int fdm = socket(domain, type, IPPROTO_MPTCP);
+    if (fdm < 0) {
+        JNU_ThrowByNameWithLastError(env, "java/net/SocketException", "socket(IPPROTO_MPTCP) failed");
+        return;
+    }
+
+    if (domain == AF_INET6) {
+        if (getsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, &len) == 0) {
+            setsockopt(fdm, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, len);
+        }
+    }
+
+    if (getsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reuse, &len) == 0) {
+        setsockopt(fdm, SOL_SOCKET, SO_REUSEPORT, &reuse, len);
+    }
+
+    if (dup2(fdm, fd) < 0) {
+        JNU_ThrowByNameWithLastError(env, "java/net/SocketException", "dup2 failed");
+        close(fdm);
+        return;
+    }
+    if (close(fdm) < 0) {
+        JNU_ThrowByNameWithLastError(env, "java/net/SocketException", "close failed");
+        return;
+    }
+#else
+    JNU_ThrowByName(env, "java/net/SocketException", "MPTCP not supported on this platform");
+#endif
+}
+
+/*
+ * Class:    jdk_net_LinuxSocketOptions
+ * Method:   getMptcpEnabled0
+ * Signature: (I)I
+ */
+JNIEXPORT jboolean JNICALL
+Java_jdk_net_LinuxSocketOptions_getMptcpEnabled0(JNIEnv *env, jclass clazz, jint fd) {
+#ifdef SO_PROTOCOL
+    int proto = 0;
+    socklen_t len = sizeof(int);
+    if (getsockopt(fd, SOL_SOCKET, SO_PROTOCOL, &proto, &len) == -1) {
+        JNU_ThrowByNameWithLastError(env, "java/net/SocketException", "getsockopt(SO_PROTOCOL) failed");
+        return JNI_FALSE;
+    }
+#ifdef IPPROTO_MPTCP
+    return (proto == IPPROTO_MPTCP) ? JNI_TRUE : JNI_FALSE;
+#else
+    return JNI_FALSE;
+#endif
+#else
+    return JNI_FALSE;
+#endif
 }
